@@ -1,0 +1,79 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/fs.h>
+
+#define MBR_SIZE 512
+#define PARTITION_ENTRY_SIZE 16
+#define NUM_PARTITIONS 4
+
+// 分区表项结构体
+struct partition_entry {
+    unsigned char bootable;         // 启动标志
+    unsigned char start_head;       // 启动磁头
+    unsigned char start_sector;     // 启动扇区
+    unsigned char start_cylinder;   // 启动柱面
+    unsigned char partition_type;   // 分区类型
+    unsigned char end_head;         // 结束磁头
+    unsigned char end_sector;       // 结束扇区
+    unsigned char end_cylinder;     // 结束柱面
+    unsigned int start_lba;         // 起始 LBA 扇区
+    unsigned int partition_size;    // 分区大小（单位：扇区）
+};
+
+// MBR 结构体
+struct mbr {
+    unsigned char bootstrap_code[446];  // 引导代码（446 字节）
+    struct partition_entry partition[NUM_PARTITIONS];  // 分区表（4 个条目，每个 16 字节）
+    unsigned short signature;           // 0x55AA (MBR 的签名)
+};
+
+// 打印分区信息
+void print_partition_info(struct partition_entry *part) {
+    printf("  Bootable: %s\n", part->bootable ? "Yes" : "No");
+    printf("  Partition Type: 0x%02x\n", part->partition_type);
+    printf("  Start LBA: %u\n", part->start_lba);
+    printf("  Partition Size: %u sectors\n", part->partition_size);
+}
+
+// 读取并解析 MBR
+void read_and_parse_mbr(const char *device) {
+    int fd = open(device, O_RDONLY);
+    if (fd == -1) {
+        perror("Unable to open device");
+        return;
+    }
+
+    struct mbr mbr_data;
+    ssize_t bytes_read = read(fd, &mbr_data, MBR_SIZE);
+    if (bytes_read != MBR_SIZE) {
+        perror("Failed to read MBR");
+        close(fd);
+        return;
+    }
+
+    // 检查 MBR 的签名
+    if (mbr_data.signature != 0xAA55) {
+        printf("Invalid MBR signature: 0x%04x\n", mbr_data.signature);
+        close(fd);
+        return;
+    }
+
+    // 打印分区信息
+    printf("MBR Partition Table:\n");
+    for (int i = 0; i < NUM_PARTITIONS; i++) {
+        printf("Partition %d:\n", i + 1);
+        print_partition_info(&mbr_data.partition[i]);
+    }
+
+    close(fd);
+}
+
+int main() {
+    const char *device = "/dev/sda";  // 替换为你需要解析的磁盘设备文件路径
+    read_and_parse_mbr(device);
+    return 0;
+}
