@@ -1,0 +1,148 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+
+#define BLOCK_SIZE 4096  // 每个数据块大小
+#define FILENAME_MAX_LENGTH 255
+
+// 简化版基数树节点
+typedef struct RadixTreeNode {
+    off_t offset;                // 数据块在文件中的偏移量
+    char *data;                  // 数据块内容
+    struct RadixTreeNode *left;  // 左子树
+    struct RadixTreeNode *right; // 右子树
+} RadixTreeNode;
+
+// 简化的基数树结构
+typedef struct RadixTree {
+    RadixTreeNode *root;
+} RadixTree;
+
+// 创建新节点
+RadixTreeNode* createNode(off_t offset) {
+    RadixTreeNode *node = (RadixTreeNode*)malloc(sizeof(RadixTreeNode));
+    node->offset = offset;
+    node->data = NULL;
+    node->left = node->right = NULL;
+    return node;
+}
+
+// 查找或插入节点
+RadixTreeNode* insertNode(RadixTree *tree, off_t offset) {
+    if (!tree->root) {
+        tree->root = createNode(offset);
+        return tree->root;
+    }
+
+    RadixTreeNode *current = tree->root;
+    while (1) {
+        if (offset < current->offset) {
+            if (current->left == NULL) {
+                current->left = createNode(offset);
+                return current->left;
+            }
+            current = current->left;
+        } else if (offset > current->offset) {
+            if (current->right == NULL) {
+                current->right = createNode(offset);
+                return current->right;
+            }
+            current = current->right;
+        } else {
+            return current;
+        }
+    }
+}
+
+// 从文件读取数据块到内存
+void readDataFromFile(const char *filename, off_t offset, char *buffer) {
+    int fd = open(filename, O_RDONLY);
+    if (fd < 0) {
+        perror("Failed to open file");
+        exit(EXIT_FAILURE);
+    }
+
+    // 跳转到文件的指定偏移量
+    if (lseek(fd, offset, SEEK_SET) == -1) {
+        perror("Failed to seek to the offset");
+        exit(EXIT_FAILURE);
+    }
+
+    // 读取数据块
+    ssize_t bytesRead = read(fd, buffer, BLOCK_SIZE);
+    if (bytesRead < 0) {
+        perror("Failed to read from file");
+        exit(EXIT_FAILURE);
+    }
+
+    // 打印磁盘访问日志
+    printf("Disk read: Offset = %lld, Length = %zd bytes\n", offset, bytesRead);
+
+    close(fd);
+}
+
+// 写数据块到文件
+void writeDataToFile(const char *filename, off_t offset, const char *data, size_t length) {
+    int fd = open(filename, O_WRONLY | O_APPEND);
+    if (fd < 0) {
+        perror("Failed to open file for writing");
+        exit(EXIT_FAILURE);
+    }
+
+    // 跳转到文件的指定偏移量
+    if (lseek(fd, offset, SEEK_SET) == -1) {
+        perror("Failed to seek to the offset");
+        exit(EXIT_FAILURE);
+    }
+
+    // 写入数据块
+    ssize_t bytesWritten = write(fd, data, length);
+    if (bytesWritten < 0) {
+        perror("Failed to write to file");
+        exit(EXIT_FAILURE);
+    }
+
+    // 打印磁盘访问日志
+    printf("Disk write: Offset = %lld, Length = %zd bytes\n", offset, bytesWritten);
+
+    close(fd);
+}
+
+// 查找数据块，若没有则读取数据
+char* getDataFromBuffer(RadixTree *tree, const char *filename, off_t offset) {
+    RadixTreeNode *node = insertNode(tree, offset);
+
+    if (!node->data) {
+        // 如果缓冲区没有数据，则读取文件数据
+        node->data = (char*)malloc(BLOCK_SIZE);
+        readDataFromFile(filename, offset, node->data);
+    }
+    return node->data;
+}
+
+// 主函数
+int main() {
+    const char *filename = "largefile.dat";
+    RadixTree tree = {NULL};  // 初始化树
+    off_t offset = 0;
+
+    // 假设要读取多个数据块
+    while (offset < 10240) {  // 假设读取10个数据块
+        char *data = getDataFromBuffer(&tree, filename, offset);
+        printf("Accessed data at offset %lld: %s\n", offset, data);  // 打印获取的数据
+
+        // 在内存缓冲区中写回数据（示例）
+        writeDataToFile(filename, offset, data, BLOCK_SIZE);
+
+        offset += BLOCK_SIZE;  // 移动到下一个数据块
+    }
+
+    return 0;
+}
+
+//dd if=/dev/zero of=largefile.dat bs=1M count=100
+//使用上述指令创建一个名为 largefile.dat 的 100MB 大小的文件
