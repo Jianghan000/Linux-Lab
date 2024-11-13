@@ -1,0 +1,112 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MEM_SIZE 8192
+
+// 预设的内存块大小
+#define BLOCK_SIZES_COUNT 8
+size_t BLOCK_SIZES[BLOCK_SIZES_COUNT] = {8, 16, 32, 64, 128, 256, 512, 1024};
+
+// 静态内存池
+char BUFF[MEM_SIZE];
+
+// 用于管理内存块的结构
+typedef struct Block {
+    size_t size;              // 内存块大小
+    struct Block* next;       // 指向下一个内存块
+} Block;
+
+// 内存池的初始内存块（整个BUFF）
+Block* free_list = NULL;
+
+// 初始化内存池
+void init_memory_pool() {
+    free_list = (Block*)BUFF;
+    free_list->size = MEM_SIZE - sizeof(Block);
+    free_list->next = NULL;
+}
+
+// 分配内存
+void* mmalloc(size_t size) {
+    // 选择适当大小的内存块
+    size_t block_size = 0;
+    for (int i = 0; i < BLOCK_SIZES_COUNT; i++) {
+        if (size <= BLOCK_SIZES[i]) {
+            block_size = BLOCK_SIZES[i];
+            break;
+        }
+    }
+    
+    if (block_size == 0) {
+        printf("mmalloc: 无法分配请求的内存大小 %zu\n", size);
+        return NULL;
+    }
+
+    Block* prev = NULL;
+    Block* curr = free_list;
+    
+    // 查找足够大的空闲块
+    while (curr != NULL) {
+        if (curr->size >= block_size) {
+            // 找到一个足够大的块
+            if (curr->size > block_size + sizeof(Block)) {
+                // 如果剩余空间足够容纳另一个内存块，则拆分
+                Block* next_block = (Block*)((char*)curr + block_size);
+                next_block->size = curr->size - block_size - sizeof(Block);
+                next_block->next = curr->next;
+                curr->next = next_block;
+            }
+
+            // 分配内存
+            if (prev == NULL) {
+                free_list = curr->next;
+            } else {
+                prev->next = curr->next;
+            }
+            
+            curr->size = block_size;  // 真实分配的大小
+            printf("mmalloc: 分配内存块 %p，大小 %zu 字节\n", (void*)curr, block_size);
+            return (void*)(curr + 1);  // 返回内存块的起始位置（跳过 Block 结构）
+        }
+
+        prev = curr;
+        curr = curr->next;
+    }
+
+    // 如果没有找到合适的内存块
+    printf("mmalloc: 内存池不足，无法分配 %zu 字节\n", size);
+    return NULL;
+}
+
+// 释放内存
+void mfree(void* ptr) {
+    if (ptr == NULL) {
+        printf("mfree: 无效的释放请求，指针为空\n");
+        return;
+    }
+
+    Block* block = (Block*)ptr - 1;  // 获取实际的块头
+    printf("mfree: 释放内存块 %p，大小 %zu 字节\n", ptr, block->size);
+
+    // 将释放的块加入空闲链表
+    block->next = free_list;
+    free_list = block;
+}
+
+int main() {
+    // 初始化内存池
+    init_memory_pool();
+    
+    // 测试内存分配和释放
+    void* ptr1 = mmalloc(64);
+    void* ptr2 = mmalloc(128);
+    void* ptr3 = mmalloc(512);
+    mfree(ptr2);
+    void* ptr4 = mmalloc(32);
+    mfree(ptr1);
+    mfree(ptr3);
+    mfree(ptr4);
+
+    return 0;
+}
