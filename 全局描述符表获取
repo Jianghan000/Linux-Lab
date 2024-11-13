@@ -1,0 +1,52 @@
+#include <stdio.h>
+#include <stdint.h>
+
+// 定义 GDT 表条目的结构体
+struct gdt_entry {
+    uint16_t limit_low;        // 段限长的低16位
+    uint16_t base_low;         // 基地址的低16位
+    uint8_t  base_middle;      // 基地址的中间8位
+    uint8_t  access;           // 访问标志（描述符访问权限）
+    uint8_t  granularity;      // 粒度标志（段的粒度以及大小）
+    uint8_t  base_high;        // 基地址的高8位
+};
+
+// GDT指针结构体，用于指定GDT的地址和大小
+struct gdt_ptr {
+    uint16_t limit;  // GDT表的大小
+    uint32_t base;   // GDT表的基地址
+};
+
+// 声明汇编函数，用于加载GDT
+extern void load_gdt(struct gdt_ptr* gdtp);
+
+// 打印 GDT 条目的信息
+void print_gdt_entry(struct gdt_entry* entry, int index) {
+    printf("GDT条目 %d:\n", index);
+    // 打印 GDT 条目的基地址，按字节顺序输出
+    printf("  基地址: 0x%02x%02x%02x%02x\n", entry->base_high, entry->base_middle, entry->base_low, 0);
+    // 打印 GDT 条目的段限长（限长的低16位 + 粒度标志）
+    printf("  限长: 0x%04x%04x\n", entry->limit_low, entry->granularity);
+    // 打印访问标志（访问权限）
+    printf("  访问权限: 0x%02x\n", entry->access);
+    // 打印粒度标志
+    printf("  粒度标志: 0x%02x\n", entry->granularity);
+}
+
+int main() {
+    struct gdt_ptr gdtp;  // GDT指针结构体
+    struct gdt_entry* gdt; // GDT表条目数组
+
+    // 假设我们已经知道 GDT 的位置，在实际的操作系统中，
+    // GDT 通常会在内核启动时初始化并设置
+    // 此处为简化代码，假设直接访问 GDT。
+
+    printf("全局描述符表（GDT）:\n");
+
+    // 遍历并打印 GDT 中的前几个条目（这里只是一个示例，实际 GDT 可以有更多条目）
+    for (int i = 0; i < 3; i++) {
+        print_gdt_entry(&gdt[i], i);
+    }
+
+    return 0;
+}
