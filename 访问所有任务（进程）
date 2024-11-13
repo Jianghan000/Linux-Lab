@@ -1,0 +1,52 @@
+#include <stdio.h>
+#include <dirent.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+#define PROC_DIR "/proc"
+
+int main() {
+    DIR *dir;
+    struct dirent *entry;
+    char proc_path[256];
+    char proc_name[256];
+    FILE *fp;
+
+    // 打开 /proc 目录
+    dir = opendir(PROC_DIR);
+    if (dir == NULL) {
+        perror("opendir /proc");
+        return 1;
+    }
+
+    // 遍历 /proc 目录中的每个文件和目录
+    while ((entry = readdir(dir)) != NULL) {
+        // 跳过 "." 和 ".." 目录
+        if (entry->d_name[0] == '.') {
+            continue;
+        }
+
+        // 进程ID目录是数字
+        if (strtol(entry->d_name, NULL, 10) > 0) {
+            // 构建进程目录的路径 /proc/<pid>/comm
+            snprintf(proc_path, sizeof(proc_path), "%s/%s/comm", PROC_DIR, entry->d_name);
+
+            // 打开 comm 文件
+            fp = fopen(proc_path, "r");
+            if (fp != NULL) {
+                // 读取进程名称
+                if (fgets(proc_name, sizeof(proc_name), fp) != NULL) {
+                    // 去掉末尾的换行符
+                    proc_name[strcspn(proc_name, "\n")] = 0;
+                    // 打印进程名称
+                    printf("%s\n", proc_name);
+                }
+                fclose(fp);
+            }
+        }
+    }
+
+    closedir(dir);
+    return 0;
+}
