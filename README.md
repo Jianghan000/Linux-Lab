@@ -1,4 +1,4 @@
-#一、MBR 中磁盘分区表解析
+# 一、MBR 中磁盘分区表解析
 
 运行结果：
 MBR Partition Table:
@@ -23,6 +23,6 @@ Partition 4:
   Start LBA: 0
   Partition Size: 0 sectors
 
-#二、当前进程页表目录获取
+# 二、当前进程页表目录获取
 
 
