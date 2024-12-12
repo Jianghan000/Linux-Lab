@@ -33,15 +33,20 @@ void print_pagemap_info(pid_t pid, unsigned long vaddr) {
 
     uint64_t entry;
     ssize_t n = read(fd, &entry, sizeof(entry));
+    //读取页表项，entry 变量将存储读取的值
     if (n != sizeof(entry)) {
         perror("Failed to read pagemap entry");
         close(fd);
         return;
     }
+    //如果读取的字节数不是 sizeof(uint64_t)，说明读取失败，输出错误并返回
 
     // 解析页表项
     unsigned long frame = entry & ((1ULL << 54) - 1); // 获取物理帧号
     int present = (entry >> 63) & 1; // 页是否存在
+//entry 是一个 64 位的整数，包含了多个信息，我们从中提取出有用的信息
+//物理帧号通过掩码提取：entry & ((1ULL << 54) - 1)。1ULL << 54 表示一个 64 位的数字，其中最高的 10 位是无效位，剩余的 54 位表示物理页帧号。所以，通过掩码 ((1ULL << 54) - 1) 保留物理帧号的低 54 位。
+//页是否存在的标志存储在最高位：(entry >> 63) & 1，即通过右移 63 位并与 1 按位与操作得到 present 标志。如果该位为 1，表示页存在；如果为 0，表示页不在内存中。
 
     if (present) {
         printf("Virtual address 0x%lx maps to physical frame 0x%lx\n", vaddr, frame * PAGE_SIZE);
